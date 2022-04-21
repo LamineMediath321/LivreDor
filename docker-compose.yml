@@ -21,3 +21,7 @@ services:
             - 8080:80
         environment:
             PMA_HOST: database
+
+    rabbitmq:
+        image: rabbitmq:3.7-management
+        ports: [ 5672, 15672 ]
