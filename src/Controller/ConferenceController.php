@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
+use App\SpamChecker;
 
 class ConferenceController extends AbstractController
 {
@@ -29,7 +30,7 @@ class ConferenceController extends AbstractController
     }
 
     #[Route('/conference/{slug}', name: 'conference')]
-    public function show(Request $request, Conference $conference, CommentRepository $commentRepository, string $photoDir): Response
+    public function show(Request $request, Conference $conference, CommentRepository $commentRepository, SpamChecker $spamChecker, string $photoDir): Response
     {
         $comment = new Comment;
 
@@ -38,7 +39,7 @@ class ConferenceController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $comment->setConference($conference);
 
-            if ($photo = $form['photo']->getData()) {
+            if ($photo = $form['photoFilename']->getData()) {
                 $filename = bin2hex(random_bytes(6)) . '.' . $photo->guessExtension();
                 try {
                     $photo->move($photoDir, $filename);
@@ -50,6 +51,18 @@ class ConferenceController extends AbstractController
 
 
             $this->em->persist($comment);
+
+            $context = [
+                'user_ip' => $request->getClientIp(),
+                'user_agent' => $request->headers->get('user-agent'),
+                'referrer' => $request->headers->get('referer'),
+                'permalink' => $request->getUri(),
+            ];
+            if (2 === $spamChecker->getSpamScore($comment, $context)) {
+                throw new \RuntimeException('Blatant spam, go away!');
+            }
+
+
             $this->em->flush();
 
             return $this->redirectToRoute('conference', [
